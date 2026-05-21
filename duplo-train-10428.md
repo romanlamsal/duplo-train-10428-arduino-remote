@@ -117,19 +117,25 @@ Firmware now subscribes at connect:
 0x0a 0x00 0x41 0x36 0x00 0x01 0x00 0x00 0x00 0x01
 ```
 
-Notifications arrive as Port-Value-Single (`0x45`) on port `0x36`. Value
-width hasn't been confirmed on the 10428 yet, so `onNotify` accepts both
-forms and decodes the value as a signed LE integer:
+Notifications arrive as Port-Value-Single (`0x45`) on port `0x36`:
 
-| Total len | Payload width | Decode as |
-|---|---|---|
-| 5 | 1 byte  | `int8_t` |
-| 6 | 2 bytes | `int16_t` LE |
+```
+notify: 05 00 45 36 <int8>
+```
 
-Only the sign is consumed (`Train::observedDirection()` returns `-1/0/+1`).
+Confirmed by pushing the train forward/backward by hand (motor unpowered)
+and watching the values transition smoothly through zero, e.g.:
 
-To verify the width on real hardware, drive `60` then `-60` over the REPL
-and check the `notify:` lines for port `0x36`.
+```
+forward push  : 11, 1f, 32, 36, 38, 39, 3a, 3d, 40, 00      (+17..+64, →0)
+backward push : ec, d1, c7, c3, c6, bf, c2, c0, d4, f0, 00  (-20..-65, →0)
+```
+
+`onNotify` decodes byte 4 as `int8_t` and stores its sign on
+`gObservedDir`. Only the sign is consumed (`Train::observedDirection()`
+returns `-1/0/+1`). An earlier int16-fallback branch was removed once the
+int8 format was confirmed — re-add if a future hub variant turns out to
+emit wider payloads.
 
 ## Still to do / sniff
 

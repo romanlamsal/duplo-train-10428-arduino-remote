@@ -30,21 +30,11 @@ static void onNotify(NimBLERemoteCharacteristic* c, uint8_t* data, size_t len, b
   Serial.print("notify:");
   for (size_t i = 0; i < len; i++) Serial.printf(" %02x", data[i]);
   Serial.println();
-  // Port-Value-Single on speedometer (port 0x36):
-  //   [len, 0x00, 0x45, 0x36, <signed value LE>]
-  // Payload width depends on the port's mode-0 dataset type. Old DUPLO
-  // hub used int8 here. Handle 1- or 2-byte signed values; longer payloads
-  // would mean the format differs and need re-sniffing.
-  if (len >= 5 && data[2] == 0x45 && data[3] == 0x36) {
-    int32_t v = 0;
-    if (len == 5) {
-      v = (int8_t)data[4];
-    } else if (len == 6) {
-      v = (int16_t)((uint16_t)data[4] | ((uint16_t)data[5] << 8));
-    }
-    if (len == 5 || len == 6) {
-      gObservedDir = (v > 0) - (v < 0);
-    }
+  // Port-Value-Single on speedometer (port 0x36): [05 00 45 36 <int8>].
+  // Width confirmed by sniffing on the 10428 (see duplo-train-10428.md).
+  if (len == 5 && data[2] == 0x45 && data[3] == 0x36) {
+    int8_t v = (int8_t)data[4];
+    gObservedDir = (v > 0) - (v < 0);
   }
   // Attached-IO: [len, 0x00, 0x04, portId, 0x01=attached, devTypeLo, devTypeHi, ...]
   if (len >= 7 && data[2] == 0x04 && data[4] == 0x01) {
