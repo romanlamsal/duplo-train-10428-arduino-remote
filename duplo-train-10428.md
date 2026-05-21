@@ -109,6 +109,28 @@ notify: 08 00 45 34 <op_lo> <op_hi> <par_lo> <par_hi>
 Captured horn-brick events used opcode `0xa001` (NB: different from the
 `0x0107` write-side opcode — read and write opcodes are not symmetric).
 
+## Speedometer (port 0x36 mode 0)
+
+Firmware now subscribes at connect:
+
+```
+0x0a 0x00 0x41 0x36 0x00 0x01 0x00 0x00 0x00 0x01
+```
+
+Notifications arrive as Port-Value-Single (`0x45`) on port `0x36`. Value
+width hasn't been confirmed on the 10428 yet, so `onNotify` accepts both
+forms and decodes the value as a signed LE integer:
+
+| Total len | Payload width | Decode as |
+|---|---|---|
+| 5 | 1 byte  | `int8_t` |
+| 6 | 2 bytes | `int16_t` LE |
+
+Only the sign is consumed (`Train::observedDirection()` returns `-1/0/+1`).
+
+To verify the width on real hardware, drive `60` then `-60` over the REPL
+and check the `notify:` lines for port `0x36`.
+
 ## Still to do / sniff
 
 - **Map the other action bricks.** Roll the train over each of the 5
@@ -116,8 +138,7 @@ Captured horn-brick events used opcode `0xa001` (NB: different from the
   `0xa001` (or other) read-side opcode for each, and any associated `0x0107`
   write-side sound id by scrubbing through the LEGO app. With the table
   filled in, `Train::honk()` can grow `Train::brake()`, `Train::depart()`, etc.
-- **Speedometer reads.** Subscribe with `0x41 0x36 <mode> 0x01 0x00 0x00 0x00 0x01`
-  for mode 0 (speed) and mode 1 (count) and decode notifications.
+- **Speedometer mode 1 (count).** Tick counter, not yet decoded.
 - **Color sensor reads.** Once the new color sensor port is identified,
   same subscribe pattern. The train usually has a sensor pointing down at
   the track to read colored "action" bricks.

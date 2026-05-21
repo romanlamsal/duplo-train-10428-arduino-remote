@@ -8,6 +8,10 @@ static const uint8_t    MFG_DUPLO_NEW = 0x21;
 
 static NimBLEAdvertisedDevice* gFound = nullptr;
 
+// Sign of the most recently observed speedometer reading on port 0x36.
+// Updated by onNotify, read by Train::observedDirection().
+static volatile int8_t gObservedDir = 0;
+
 class ScanCB : public NimBLEScanCallbacks {
   void onResult(const NimBLEAdvertisedDevice* d) override {
     if (!d->isAdvertisingService(SVC_LPF2)) return;
@@ -26,6 +30,22 @@ static void onNotify(NimBLERemoteCharacteristic* c, uint8_t* data, size_t len, b
   Serial.print("notify:");
   for (size_t i = 0; i < len; i++) Serial.printf(" %02x", data[i]);
   Serial.println();
+  // Port-Value-Single on speedometer (port 0x36):
+  //   [len, 0x00, 0x45, 0x36, <signed value LE>]
+  // Payload width depends on the port's mode-0 dataset type. Old DUPLO
+  // hub used int8 here. Handle 1- or 2-byte signed values; longer payloads
+  // would mean the format differs and need re-sniffing.
+  if (len >= 5 && data[2] == 0x45 && data[3] == 0x36) {
+    int32_t v = 0;
+    if (len == 5) {
+      v = (int8_t)data[4];
+    } else if (len == 6) {
+      v = (int16_t)((uint16_t)data[4] | ((uint16_t)data[5] << 8));
+    }
+    if (len == 5 || len == 6) {
+      gObservedDir = (v > 0) - (v < 0);
+    }
+  }
   // Attached-IO: [len, 0x00, 0x04, portId, 0x01=attached, devTypeLo, devTypeHi, ...]
   if (len >= 7 && data[2] == 0x04 && data[4] == 0x01) {
     uint16_t devType = (uint16_t)data[5] | ((uint16_t)data[6] << 8);
@@ -115,7 +135,18 @@ bool Train::connect() {
   uint8_t enableEvents[] = {0x0a, 0x00, 0x41, 0x34, 0x01, 0x01, 0x00, 0x00, 0x00, 0x01};
   chr->writeValue(enableEvents, sizeof(enableEvents), false);
 
+  // Subscribe to speedometer notifications on port 0x36 mode 0.
+  // Sign of the reported value is our source of truth for the train's
+  // current direction of travel (used by the pot throttle).
+  gObservedDir = 0;
+  uint8_t enableSpeed[] = {0x0a, 0x00, 0x41, 0x36, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01};
+  chr->writeValue(enableSpeed, sizeof(enableSpeed), false);
+
   return true;
+}
+
+int Train::observedDirection() const {
+  return gObservedDir;
 }
 
 void Train::disconnect() {
