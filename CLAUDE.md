@@ -1,0 +1,3 @@
+- read @README.md first before planning
+- in all interactions, commits, plan outputs etc. sacrifice grammar to keep your answers short and concise
+- there's reference implementation in node-poweredup and pybricks. Make sure to __never__ fall in the trap of not checking which train model the respective code reference is targeting. this project will __always__ target the model 10428
