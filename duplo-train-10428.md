@@ -48,15 +48,17 @@ Sent by hub right after subscribe. Format:
 | Port | Device type | Identity |
 |---|---|---|
 | `0x32` (50) | `0x29` = 41 | **Motor** (DUPLO_TRAIN_BASE_MOTOR — same ID as old hub) |
-| `0x33` (51) | `0x5b` = 91 | unknown — **candidate: speaker** |
-| `0x34` (52) | `0x5a` = 90 | unknown |
-| `0x35` (53) | `0x14` = 20 | unknown — **candidate: RGB head light** |
+| `0x33` (51) | `0x5b` = 91 | **TAG** (write-only output; mode 0, single u16. External writes silently rejected with error 0x06 in practice.) |
+| `0x34` (52) | `0x5a` = 90 | **EVENTS** trigger + observation port. 3 modes: 0=VERS, 1=EVENTS (2×u16 LE), 2=DEBUG. All commands (sound, light) go through mode 1. Also emits action-brick scan events on the same channel. |
+| `0x35` (53) | `0x14` = 20 | **Voltage sensor** (battery). Read-only, 2-byte LE mV reading. |
 | `0x36` (54) | `0x2c` = 44 | **Speedometer** (same ID as old hub) |
 
 The old Duplo train used ports 0/1/18/19 with device IDs 41/42/43/44.
-10428 renumbered ports into the `0x3x` range AND introduced three new
-device types (20, 90, 91). Speaker (42) and color sensor (43) are absent
-from this list, so at least one of the new devices replaces each.
+10428 renumbered ports into the `0x3x` range and folded the old beeper +
+color-sensor + RGB-light into a single bidirectional **EVENTS** port
+(`0x34`, device type `0x5a`). Device types `0x5a` (90) and `0x5b` (91)
+are not in pybricks `technical-info/assigned-numbers.md`; hub variant
+`0x21` is also undocumented there.
 
 ## Wire format
 
@@ -78,33 +80,42 @@ LWP3 envelope written to the LPF2 characteristic:
 
 `start+fb = 0x11` = execute immediately + request command feedback.
 
-### Sound (untested on 10428)
+### EVENTS — sound, light, brick scans (port 0x34 mode 1)
 
-Original Duplo train recipe (from node-poweredup), to send on speaker port:
+The 10428's beeper, RGB light, and color sensor are all collapsed into a
+single bidirectional port: **`0x34` mode 1 ("EVENTS")**. Two 16-bit LE
+values per write/read: `(opcode, parameter)`. Recovered by sniffing the
+official LEGO DUPLO Interactive Trains app via Android Bluetooth HCI
+snoop.
 
-1. Enable mode-01 notifications on the speaker port:
-   `0x0a 0x00 0x41 <port> 0x01 0x01 0x00 0x00 0x00 0x01`
-2. Write direct sound id:
-   `0x08 0x00 0x81 <port> 0x11 0x51 0x01 <soundId>`
+1. Subscribe to EVENTS notifications (also gates writes):
+   `0x0a 0x00 0x41 0x34 0x01 0x01 0x00 0x00 0x00 0x01`
+2. Write an event:
+   `0x0b 0x00 0x81 0x34 0x11 0x51 0x01 <op_lo> <op_hi> <par_lo> <par_hi>`
 
-Sound IDs from old firmware (may or may not match 10428):
-`BRAKE=3, STATION_DEPARTURE=5, WATER_REFILL=7, HORN=9, STEAM=10`.
+| Opcode | Parameter | Effect |
+|---|---|---|
+| `0x0107` | sound id (`0` = horn) | Play sound. **Side effect:** train also flashes the headlight yellow. |
+| `0x0104` | colour index | Set headlight colour. Observed palette: `0, 1, 7, 8, 9, 10, 11`. |
+| `0xf001` | 0 | Session init. LEGO app sends once at connect; in practice our subscribe is enough and we never need to send this. |
+
+Inbound action-brick scan events appear as `0x45` Port Value Single on
+port `0x34`, e.g. the horn brick produces:
+
+```
+notify: 08 00 45 34 <op_lo> <op_hi> <par_lo> <par_hi>
+```
+
+Captured horn-brick events used opcode `0xa001` (NB: different from the
+`0x0107` write-side opcode — read and write opcodes are not symmetric).
 
 ## Still to do / sniff
 
-- **Find the speaker port.** Brute-force a HORN command (sound id 9, mode 1)
-  on ports `0x33`, `0x34`, `0x35`; listen for which one makes noise.
-- **Identify device types 0x14 / 0x5a / 0x5b.** Subscribe to mode 0 on each
-  and observe notification payloads — RGB light vs color sensor vs speaker
-  vs anything else. Compare patterns: color sensors emit 1-byte color
-  index; speaker is write-only; light is write-only.
-- **Sound IDs for the new firmware.** Even once we find the speaker port,
-  the old 1/3/5/7/9/10 set may have been extended or replaced — enumerate
-  `0..31` once port is known.
-- **Headlight / brake light control.** The 10428 has visible lights on the
-  loco. One of the new device types is presumably an RGB light. LPF2
-  RGB-light write recipe: `0x81 <port> 0x11 0x51 <mode> <data>` with
-  mode 0 = color index (0..10), mode 1 = absolute RGB.
+- **Map the other action bricks.** Roll the train over each of the 5
+  action bricks (horn, brake, station, water, steam) and record both the
+  `0xa001` (or other) read-side opcode for each, and any associated `0x0107`
+  write-side sound id by scrubbing through the LEGO app. With the table
+  filled in, `Train::honk()` can grow `Train::brake()`, `Train::depart()`, etc.
 - **Speedometer reads.** Subscribe with `0x41 0x36 <mode> 0x01 0x00 0x00 0x00 0x01`
   for mode 0 (speed) and mode 1 (count) and decode notifications.
 - **Color sensor reads.** Once the new color sensor port is identified,
