@@ -76,16 +76,23 @@ void loop() {
     }
   }
 
-  // Pot drives speed only while armed. Fwd/Back arm, Stop disarms — so
-  // the brake/coast after Stop runs untouched by pot tweaks.
+  // Pot drives speed only while armed. Fwd/Back arm + set direction,
+  // Stop disarms — so the brake/coast after Stop runs untouched by pot
+  // tweaks. Direction comes from the last button press, not the
+  // speedometer sign, so a button-driven reverse isn't undone by the
+  // train's residual forward inertia.
   static bool armed = false;
+  static int  intendedDir = 0;
   static const int TOLERANCE = 5;
 
   ButtonPress pressedButton = handleButtons();
   switch (pressedButton) {
-    case ButtonPress::Forward:  armed = true;  train.setMotorSpeed(+readThrottle()); break;
-    case ButtonPress::Backward: armed = true;  train.setMotorSpeed(-readThrottle()); break;
-    case ButtonPress::Stop:     armed = false; train.setMotorSpeed(0);               break;
+    case ButtonPress::Forward:  armed = true;  intendedDir = +1;
+                                train.setMotorSpeed(+readThrottle()); break;
+    case ButtonPress::Backward: armed = true;  intendedDir = -1;
+                                train.setMotorSpeed(-readThrottle()); break;
+    case ButtonPress::Stop:     armed = false; intendedDir =  0;
+                                train.setMotorSpeed(0);               break;
     case ButtonPress::Honk:     train.honk();        break;
     case ButtonPress::Light:    train.cycleLights(); break;
     case ButtonPress::None: break;
@@ -99,8 +106,7 @@ void loop() {
     if (speed != 0) {
       int pot = readThrottle();
       if (abs(pot - abs(speed)) > TOLERANCE) {
-        int dir = (speed > 0) ? +1 : -1;
-        train.setMotorSpeed(dir * pot);
+        train.setMotorSpeed(intendedDir * pot);
       }
     }
   }

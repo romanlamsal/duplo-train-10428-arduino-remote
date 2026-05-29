@@ -248,15 +248,16 @@ of brick → opcode mappings hasn't been catalogued yet; PRs welcome.
 - Query **battery** voltage or hub button events via Hub Properties.
 - **Detect manual pushes** to arm the throttle. Right now the throttle
   only arms via the Forward/Backward buttons. Pushing the train by hand
-  from a stopped state moves it but the pot stays inactive. Plan: when
-  disarmed and the speedometer reports motion that persists past a
-  short coast window, transition into the armed state with the sign of
-  the speedometer as the direction.
+  from a stopped state moves it but the pot stays inactive. See
+  [`pot-throttle-notes.md`](pot-throttle-notes.md) for the speedometer
+  ramp evidence and why this is harder than the brake case.
 - **Detect manual braking** (hand-stopping the train) as a disarm
   trigger. Currently the throttle stays armed indefinitely after Fwd /
   Back until Stop is pressed; if you grab the train and hold it the
-  motor keeps fighting at pot magnitude. Plan: if speedometer reports 0
-  for some debounce window while armed, auto-disarm.
+  motor keeps fighting at pot magnitude. See
+  [`pot-throttle-notes.md`](pot-throttle-notes.md) for the
+  speedometer-snap-to-0 evidence and the reversal-gotcha to handle
+  when wiring this up.
 
 ## References
 
