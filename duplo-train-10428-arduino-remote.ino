@@ -76,17 +76,33 @@ void loop() {
     }
   }
 
+  // Pot drives speed only while armed. Fwd/Back arm, Stop disarms — so
+  // the brake/coast after Stop runs untouched by pot tweaks.
+  static bool armed = false;
+  static const int TOLERANCE = 5;
+
   ButtonPress pressedButton = handleButtons();
   switch (pressedButton) {
-    case ButtonPress::Forward:  train.setMotorSpeed( 45); break;
-    case ButtonPress::Backward: train.setMotorSpeed(-45); break;
-    case ButtonPress::Stop:     train.setMotorSpeed(  0); break;
-    case ButtonPress::Honk:     train.honk();             break;
-    case ButtonPress::Light:    train.cycleLights();      break;
+    case ButtonPress::Forward:  armed = true;  train.setMotorSpeed(+readThrottle()); break;
+    case ButtonPress::Backward: armed = true;  train.setMotorSpeed(-readThrottle()); break;
+    case ButtonPress::Stop:     armed = false; train.setMotorSpeed(0);               break;
+    case ButtonPress::Honk:     train.honk();        break;
+    case ButtonPress::Light:    train.cycleLights(); break;
     case ButtonPress::None: break;
   }
   if (pressedButton != ButtonPress::None) {
     delay(230);
+  }
+
+  if (armed) {
+    int speed = train.observedSpeed();
+    if (speed != 0) {
+      int pot = readThrottle();
+      if (abs(pot - abs(speed)) > TOLERANCE) {
+        int dir = (speed > 0) ? +1 : -1;
+        train.setMotorSpeed(dir * pot);
+      }
+    }
   }
 
   delay(20);

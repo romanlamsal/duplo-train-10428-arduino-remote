@@ -8,9 +8,9 @@ static const uint8_t    MFG_DUPLO_NEW = 0x21;
 
 static NimBLEAdvertisedDevice* gFound = nullptr;
 
-// Sign of the most recently observed speedometer reading on port 0x36.
-// Updated by onNotify, read by Train::observedDirection().
-static volatile int8_t gObservedDir = 0;
+// Most recently observed signed speedometer reading on port 0x36.
+// Updated by onNotify, read by Train::observedSpeed().
+static volatile int8_t gObservedSpeed = 0;
 
 class ScanCB : public NimBLEScanCallbacks {
   void onResult(const NimBLEAdvertisedDevice* d) override {
@@ -33,8 +33,7 @@ static void onNotify(NimBLERemoteCharacteristic* c, uint8_t* data, size_t len, b
   // Port-Value-Single on speedometer (port 0x36): [05 00 45 36 <int8>].
   // Width confirmed by sniffing on the 10428 (see duplo-train-10428.md).
   if (len == 5 && data[2] == 0x45 && data[3] == 0x36) {
-    int8_t v = (int8_t)data[4];
-    gObservedDir = (v > 0) - (v < 0);
+    gObservedSpeed = (int8_t)data[4];
   }
   // Attached-IO: [len, 0x00, 0x04, portId, 0x01=attached, devTypeLo, devTypeHi, ...]
   if (len >= 7 && data[2] == 0x04 && data[4] == 0x01) {
@@ -128,15 +127,15 @@ bool Train::connect() {
   // Subscribe to speedometer notifications on port 0x36 mode 0.
   // Sign of the reported value is our source of truth for the train's
   // current direction of travel (used by the pot throttle).
-  gObservedDir = 0;
+  gObservedSpeed = 0;
   uint8_t enableSpeed[] = {0x0a, 0x00, 0x41, 0x36, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01};
   chr->writeValue(enableSpeed, sizeof(enableSpeed), false);
 
   return true;
 }
 
-int Train::observedDirection() const {
-  return gObservedDir;
+int Train::observedSpeed() const {
+  return gObservedSpeed;
 }
 
 void Train::disconnect() {

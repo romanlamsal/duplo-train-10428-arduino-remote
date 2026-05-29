@@ -23,6 +23,9 @@ the train yourself.
 
 - ESP32 NodeMCU (tested on ESP-WROOM-32 "DevKit V1")
 - 5 momentary pushbuttons, each wired between a GPIO and GND
+- 1 potentiometer wired between 3V3 and GND, wiper on GPIO 34
+  (throttle). 300° pots work fine; ADC spans the full mechanical sweep
+  either way.
 - LEGO DUPLO 10428 train (the steam train with the new hub variant — see
   [Hub identification](#hub-identification) if you're not sure which one you
   have)
@@ -30,13 +33,14 @@ the train yourself.
 Buttons use the ESP32's internal pull-ups, so no external resistors are
 needed. Defaults in [`Buttons.cpp`](Buttons.cpp):
 
-| Function | GPIO |
-|---|---|
-| Forward  | 12 |
-| Backward | 13 |
-| Stop     | 14 |
-| Honk     | 27 |
-| Light    | 26 |
+| Function | GPIO | Notes |
+|---|---|---|
+| Forward   | 12 |  |
+| Backward  | 13 |  |
+| Stop      | 14 |  |
+| Honk      | 27 |  |
+| Light     | 26 |  |
+| Throttle  | 34 | ADC1, input-only, BLE-safe |
 
 ## Build & flash
 
@@ -47,9 +51,20 @@ Library Manager, and upload.
 ## Usage
 
 On boot the firmware scans for the train, connects, subscribes to
-notifications, and is ready. Press a button — the train reacts. Forward and
-backward set a fixed cruise speed (45/100); stop kills the motor; honk plays
-the horn sound; light advances to the next colour in the LEGO-app palette.
+notifications, and is ready. Press a button — the train reacts. Forward
+and backward *arm* the throttle and start the motor at the current pot
+magnitude (scaled to `[10..100]`); honk plays the horn sound; light
+advances to the next colour in the LEGO-app palette.
+
+While armed and the train is moving, twisting the pot retracks the
+motor magnitude live — the loop watches the speedometer (port `0x36`)
+and, when `|pot - |speed|| > 5`, resends the motor command. Direction
+comes from the sign of the speedometer reading.
+
+Stop disarms the throttle and sends motor 0, so the coast/brake runs
+uninterrupted by pot tweaks. The throttle stays disarmed (pot ignored)
+until Forward or Backward is pressed again. Manual pushes by hand are
+not yet handled.
 
 A small serial REPL is also exposed at 115200 baud for poking at the train
 during development:
@@ -227,11 +242,21 @@ of brick → opcode mappings hasn't been catalogued yet; PRs welcome.
 
 ## What this firmware doesn't (yet) do
 
-- Read the **speedometer** on port `0x36`.
 - Read the **action-brick sensor** beyond noticing notifications arrive —
   no decoded mapping for brick → meaning.
 - Drive the **hub status LED** (port not yet identified on the 10428).
 - Query **battery** voltage or hub button events via Hub Properties.
+- **Detect manual pushes** to arm the throttle. Right now the throttle
+  only arms via the Forward/Backward buttons. Pushing the train by hand
+  from a stopped state moves it but the pot stays inactive. Plan: when
+  disarmed and the speedometer reports motion that persists past a
+  short coast window, transition into the armed state with the sign of
+  the speedometer as the direction.
+- **Detect manual braking** (hand-stopping the train) as a disarm
+  trigger. Currently the throttle stays armed indefinitely after Fwd /
+  Back until Stop is pressed; if you grab the train and hold it the
+  motor keeps fighting at pot magnitude. Plan: if speedometer reports 0
+  for some debounce window while armed, auto-disarm.
 
 ## References
 
