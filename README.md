@@ -66,6 +66,11 @@ uninterrupted by pot tweaks. The throttle stays disarmed (pot ignored)
 until Forward or Backward is pressed again. Manual pushes by hand are
 not yet handled.
 
+The pot is optional — flip `USE_POT` to `true` in
+[`Buttons.cpp`](Buttons.cpp) to use the pot, or leave it `false`
+(the default) to drive at a fixed throttle of 65. Useful for testing
+the firmware on a bare board.
+
 A small serial REPL is also exposed at 115200 baud for poking at the train
 during development:
 

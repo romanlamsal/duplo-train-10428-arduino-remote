@@ -7,7 +7,9 @@ static const int BTN_STP = 14;
 static const int BTN_HNK = 27;
 static const int BTN_LGT = 26;
 static const int LED_PIN =  2;
-static const int POT_PIN = 34;  // ADC1, input-only, BLE-safe
+static const int  POT_PIN           = 34;    // ADC1, input-only, BLE-safe
+static const bool USE_POT           = false;  // flip to false when flashing without a pot wired up
+static const int  FALLBACK_THROTTLE = 65;    // used when USE_POT == false
 
 void setupButtons() {
   pinMode(BTN_FWD, INPUT_PULLUP);
@@ -28,6 +30,7 @@ ButtonPress handleButtons() {
 }
 
 int readThrottle() {
+  if (!USE_POT) return FALLBACK_THROTTLE;
   // CAUTION: I was dumb and wired the pot's VCC and GND backwards, so I have to invert first.
   int raw = 4095 - analogRead(POT_PIN);
   if (raw < 0)    raw = 0;
