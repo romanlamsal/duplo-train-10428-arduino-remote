@@ -16,6 +16,14 @@ void setup() {
   setupButtons();
 }
 
+static const bool USE_POT           = true;  // flip to false when flashing without a pot wired up
+static const int  FALLBACK_THROTTLE = 65;    // used when USE_POT == false
+
+int readThrottle() {
+  if (!USE_POT) return FALLBACK_THROTTLE;
+  return 10 + readPotentiometerSampled(10) * 90;
+}
+
 void loop() {
   if (!train.isConnected()) {
     train.disconnect();
@@ -105,6 +113,7 @@ void loop() {
     int speed = train.observedSpeed();
     if (speed != 0) {
       int pot = readThrottle();
+      Serial.printf("Poti: %d\n", pot);
       if (abs(pot - abs(speed)) > TOLERANCE) {
         train.setMotorSpeed(intendedDir * pot);
       }
